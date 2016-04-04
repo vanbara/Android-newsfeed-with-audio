@@ -1,0 +1,930 @@
+
+
+
+
+public class News_Feed extends SherlockListFragment {
+	String Feed_Type;
+	boolean loadingMore = false;
+	CustomBaseAdapter adapter_feed = null;
+	View loadMoreView;
+	RelativeLayout mp_layout;
+	View my_view;
+	MediaPlayer mp = null;
+	List<RowItem> rowItems = new ArrayList<RowItem>();
+	ListView list_feed;
+	int MYACTIVITY_REQUEST_CODE = 101;
+	
+	@Override
+	public void onActivityResult(int requestCode, int resultCode, Intent data)
+	{
+	    super.onActivityResult(requestCode, resultCode, data);
+	    if ((requestCode == MYACTIVITY_REQUEST_CODE) && (resultCode == Activity.RESULT_OK))
+	    	adapter_feed.notifyDataSetChanged();
+	}
+    
+    @Override
+    public void onActivityCreated(Bundle savedInstanceState) {
+	     super.onActivityCreated(savedInstanceState);
+	
+	     mp_layout = (RelativeLayout) getActivity().findViewById(R.id.MP_Layout_Main);  
+	     mp_layout.setVisibility(RelativeLayout.GONE);
+	    
+	    list_feed = (ListView) my_view.findViewById(android.R.id.list);
+	        
+	    loadMoreView = ((LayoutInflater)getActivity().getSystemService(Context.LAYOUT_INFLATER_SERVICE)).inflate(R.layout.loadmore, null, false);
+	    list_feed.addFooterView(loadMoreView);
+	
+	    adapter_feed = new CustomBaseAdapter(getActivity(), R.layout.list_chits, rowItems);
+	    
+	    list_feed.setAdapter(adapter_feed);   
+	        
+	    Feed_Type = "General";
+	    new General_Feed().execute(Feed_Type);
+
+    }
+
+
+    @Override
+    public View onCreateView(LayoutInflater inflater, ViewGroup container,Bundle savedInstanceState) {
+    
+        my_view = inflater.inflate(R.layout.feed, container, false);
+
+        return my_view;
+    }
+
+
+    
+	public class General_Feed extends AsyncTask<String, Void, Void> {
+    	
+	       SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(getActivity());
+	       String username = sharedPreferences.getString("Name", null);
+	       String email = sharedPreferences.getString("Email", null);
+	       String id = sharedPreferences.getString("ID", null);
+	       String pw = sharedPreferences.getString("PW", null);
+	   
+	       
+    	String jsonString = "";
+    	String Response = "";
+    	String Comment = "";
+    	String Chits_obj_str = "";
+    	String type = Feed_Type;
+    	   
+    	
+		@Override
+		protected Void doInBackground(String... params) {
+			loadingMore = true;
+			 HttpURLConnection connection;
+	            OutputStreamWriter request = null;
+
+	                 URL url = null;           
+	                 String parameters = "Feed="+type+"&UserName="+username+"&Email="+email+"&id="+id+"&pw="+pw+"&Offset="+rowItems.size(); 
+
+	                 
+	                 
+	                 try{
+	                	 
+	                	 url = new URL("http://somewebsite.com/android/feed.php");
+	                     connection = (HttpURLConnection) url.openConnection();
+	                     connection.setDoOutput(true);
+	                     connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+	                     connection.setRequestMethod("POST");    
+
+	                     request = new OutputStreamWriter(connection.getOutputStream());
+	                     request.write(parameters);
+	                     request.flush();
+	                     request.close();            
+	                     String line = "";
+	                     
+	                     
+	                     InputStreamReader isr = new InputStreamReader(connection.getInputStream(), "UTF-8");
+	                     BufferedReader reader = new BufferedReader(isr, 8);
+	                     StringBuilder sb = new StringBuilder();
+	                     while((line = reader.readLine()) != null){
+
+	                         sb.append(line + "\n");
+
+	                     }
+	               
+	                     jsonString = sb.toString();
+	          
+	                     
+	                     int jsonStart = jsonString.indexOf("{");
+	                     int jsonEnd = jsonString.lastIndexOf("}");
+
+	                     if (jsonStart >= 0 && jsonEnd >= 0 && jsonEnd > jsonStart) {
+	                    	 jsonString = jsonString.substring(jsonStart, jsonEnd + 1);
+	                     } else {
+	                         // deal with the absence of JSON content here
+	                     }
+	                     
+	                     
+	                     
+	                     isr.close();
+	                     reader.close();
+	                     
+	                } catch (MalformedURLException e) {
+	                    e.printStackTrace();
+	      
+	                } catch (UnsupportedEncodingException e) {
+	                    e.printStackTrace();
+	                } catch (ClientProtocolException e) {
+	                    e.printStackTrace();
+	                } catch (IOException e) {
+	                    e.printStackTrace();
+					}
+			
+			
+			// TODO Auto-generated method stub
+			return null;
+		}
+		
+		@Override
+		protected void onPostExecute(Void aVoid) {
+				
+			
+
+            JSONObject jObject;
+			try {
+
+			jObject = new JSONObject(jsonString);
+
+            JSONArray jArray = (JSONArray) jObject.get("Feed");
+            
+        	JSONObject FeedObj = jArray.getJSONObject(0);
+
+        	Response = FeedObj.getString("Result");
+        	Comment = FeedObj.getString("Comments");
+        	
+        	if(Response.equals("Successful")){
+
+        			Chits_obj_str = FeedObj.getString("Chits");
+        			JSONArray jsonArr = new JSONArray(Chits_obj_str);
+        			
+                    for(int i = 0; i < jsonArr.length(); i++){                  
+                        JSONObject chitObject = jsonArr.getJSONObject(i); 
+                        
+                        RowItem item = new RowItem(
+                        		chitObject.getString("Chit_Photo"),
+                        		chitObject.getString("Topic"), 
+                        		chitObject.getString("Title"), 
+                        		chitObject.getString("Audio"), 
+                        		chitObject.getString("User_Name"),
+                        		chitObject.getString("User_Image"),
+                        		chitObject.getString("Posted"),
+                        		chitObject.getInt("Num_Comments"),
+                        		chitObject.getInt("Chit_Likes"),
+                        		chitObject.getLong("Chit_ID"),
+                        		chitObject.getBoolean("Liked"),
+                        		chitObject.getInt("User_ID")
+                        		
+                        		);
+                      
+                        adapter_feed.add(item);
+                    }
+     
+                    
+                    adapter_feed.notifyDataSetChanged();
+                    loadingMore = false;
+  
+                    
+                    list_feed.setOnScrollListener(new OnScrollListener(){
+                    	 
+                    	   @Override
+						public void onScrollStateChanged(AbsListView view, int scrollState) {}
+                    	 
+                    	   @Override
+						public void onScroll(AbsListView view, int firstVisibleItem,
+                    	     int visibleItemCount, int totalItemCount) {
+                    	 
+                    		   
+                    		   
+                    	   int lastInScreen = firstVisibleItem + visibleItemCount;   
+	                    	   if((lastInScreen == totalItemCount) && !(loadingMore) && (mp == null)){    
+
+	                    	   		Feed_Type = "General";
+	                    	        new General_Feed().execute(Feed_Type);
+	                    	   		
+	                    	   }
+                    	   }
+                    	  });
+                    
+        	} else if(Response.equals("Failed")){
+        		if(Comment.equals("Bad Info")){
+        			SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(getActivity());
+
+        			sharedPreferences.edit().clear().commit();
+        			
+        			
+        			Intent intent = new Intent(getActivity(), login_screen.class);
+        			startActivityForResult(intent, MYACTIVITY_REQUEST_CODE);
+
+        		}
+        		
+        		list_feed.removeFooterView(loadMoreView);
+        	}
+			
+			} catch (JSONException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}  //<<< convert to jsonarray	
+			
+			
+			
+		}
+		
+
+	}
+	
+	
+	
+
+
+
+	private static class ViewHolder {
+		public TextView txtTopic;
+        public TextView txtDesc;
+		public ImageView imageView;
+		public ImageView userimageView;
+		public Button my_play_btn;
+		public Button my_like_btn;
+		public Button Comment_btn;
+		public TextView txtUsername;
+		public TextView txtposted;
+		public TextView txtcomments;
+		public TextView txtlikes;
+		 public SeekBar audio_bar;
+	
+		
+    }
+    
+	 public class ChitBtns {
+		 private Long chit_id;
+		 public Button like_btn;
+		
+	 }
+
+    
+    public class RowItem {
+        private String imageURL;
+        private String userimageURL;
+        private String audioURL;
+        private String topic;
+        private String desc;
+        private String username;
+        private String posted;
+        private Integer num_comments;
+        private Integer likes;  
+        private Long chit_id;
+        private Boolean liked;
+        private Integer user_id;
+        
+         
+        public RowItem(String imageURL, 
+        		String topic, 
+        		String desc, 
+        		String audio, 
+        		String username, 
+        		String userimageURL, 
+        		String posted, 
+        		Integer num_comments, 
+        		Integer likes,
+        		Long chit_id,
+        		Boolean liked,
+        		Integer user_id
+        		) {
+            this.imageURL = imageURL;
+            this.topic = topic;
+            this.desc = desc;
+            this.posted = posted;
+            this.audioURL = audio;
+            this.username = username;
+            this.userimageURL = userimageURL;
+            this.num_comments = num_comments;
+            this.likes = likes;
+            this.chit_id = chit_id;
+            this.liked = liked;
+            this.user_id = user_id;
+            
+        }
+        public String getposted() {
+            return posted;
+        }
+        public void setposted(String posted) {
+            this.posted = posted;
+        }
+        public Boolean getliked() {
+            return liked;
+        }
+        public void setliked(Boolean liked) {
+            this.liked = liked;
+        } 
+        public Long getchit_id() {
+            return chit_id;
+        }
+        public void setchit_id(Long chit_id) {
+            this.chit_id = chit_id;
+        }  
+        public Integer getlikes() {
+            return likes;
+        }
+        public void setlikes(Integer likes) {
+            this.likes = likes;
+        }
+        public Integer getuser_id() {
+            return user_id;
+        }
+        public void setuser_id(Integer user_id) {
+            this.user_id = user_id;
+        }  
+        public Integer getnum_comments() {
+            return num_comments;
+        }
+        public void setnum_comments(Integer num_comments) {
+            this.num_comments = num_comments;
+        }  
+        
+        public String getUserName() {
+            return username;
+        }
+        public void setUserName(String username) {
+            this.username = username;
+        }            
+        public String getImageURL() {
+            return imageURL;
+        }
+        public void setImageURL(String imageURL) {
+            this.imageURL = imageURL;
+        }
+        public String getUserImageURL() {
+            return userimageURL;
+        }
+        public void setUserImageURL(String userimageURL) {
+            this.userimageURL = userimageURL;
+        } 
+        public void setAudioURL(String audioURL) {
+            this.audioURL = audioURL;
+        }
+        public String getAudioURL() {
+            return audioURL;
+        }
+        public String getDesc() {
+            return desc;
+        }
+        public void setDesc(String desc) {
+            this.desc = desc;
+        }
+        public String getTopic() {
+            return topic;
+        }
+        public void setTopic(String topic) {
+            this.topic = topic;
+        }
+
+    }
+    
+
+class CustomBaseAdapter extends BaseAdapter implements
+OnCompletionListener, OnSeekBarChangeListener {
+    Context context;
+    List<RowItem> rowItems;
+    private ImageLoader imageLoader;
+    private ImageLoadingListener animateFirstDisplayListener;
+    private MediaPlayer mp;
+    
+
+    private Handler mHandler = new Handler();;
+
+    private Utilities utils;
+    
+    String songPath = "";
+    
+    public CustomBaseAdapter(Context context, int res, List<RowItem> items) {
+
+        this.context = context;
+        this.rowItems = items;
+        this.animateFirstDisplayListener = animateFirstDisplayListener;
+        DisplayImageOptions displayimageOptions = new DisplayImageOptions.Builder().cacheInMemory().cacheOnDisc().build();
+        ImageLoaderConfiguration config = new ImageLoaderConfiguration.Builder(getActivity()).
+                defaultDisplayImageOptions(displayimageOptions).build();
+
+        
+        imageLoader = ImageLoader.getInstance();
+        if (!imageLoader.isInited()) {
+        		imageLoader.init(config); 
+        }
+    }
+
+
+	public void add(RowItem item) {
+		// TODO Auto-generated method stub
+		this.rowItems.add(item);
+	}
+	Button play_btn;
+	SeekBar audio_bar;
+	Boolean btn_opt;
+
+	
+	TextView song_title_txt = (TextView) getActivity().findViewById(R.id.Song_Title);
+	TextView song_dur_txt = (TextView) getActivity().findViewById(R.id.Song_Duration);
+	TextView song_dur_txt_total = (TextView) getActivity().findViewById(R.id.Song_Duration_Total);
+	ToggleButton PausePlayBtn = (ToggleButton) getActivity().findViewById(R.id.main_playpause);
+	
+	@Override
+	public View getView(final int position, View convertView, ViewGroup parent) {
+        ViewHolder holder = null;
+   
+        ChitBtns opts = null;
+        LayoutInflater mInflater = (LayoutInflater)
+            context.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
+        if (convertView == null) {
+            convertView = mInflater.inflate(R.layout.list_chits, parent, false);
+            holder = new ViewHolder();
+            holder.txtDesc = (TextView) convertView.findViewById(R.id.secondLine);
+            holder.txtTopic = (TextView) convertView.findViewById(R.id.firstLine);
+            holder.txtUsername = (TextView) convertView.findViewById(R.id.user_name);
+            holder.imageView = (ImageView) convertView.findViewById(R.id.icon);
+            holder.userimageView = (ImageView) convertView.findViewById(R.id.user_icon);
+            holder.my_play_btn = (Button)  convertView.findViewById(R.id.playPauseButton);
+            holder.txtposted = (TextView) convertView.findViewById(R.id.time_posted);
+            holder.txtcomments = (TextView) convertView.findViewById(R.id.Num_Comments);
+            holder.txtlikes = (TextView) convertView.findViewById(R.id.Num_Likes);
+            holder.my_like_btn = (Button)  convertView.findViewById(R.id.Like_Btn);
+            holder.Comment_btn = (Button)  convertView.findViewById(R.id.Comment_Btn);
+            holder.my_like_btn.setTag(position);
+            holder.my_play_btn.setTag(position);
+            convertView.setTag(holder);
+
+        }
+        else {
+            holder = (ViewHolder) convertView.getTag();
+           
+        }
+        
+        final RowItem rowItem = (RowItem) getItem(position);
+    
+        holder.userimageView.setTag(rowItem.getuser_id());
+        holder.imageView.setTag(rowItem.getchit_id());
+        holder.Comment_btn.setTag(rowItem.getchit_id());  
+        holder.txtUsername.setText(rowItem.getUserName());
+        holder.txtDesc.setText(rowItem.getDesc());
+        holder.txtTopic.setText(rowItem.getTopic());
+        holder.txtposted.setText(rowItem.getposted());
+        holder.txtcomments.setText(rowItem.getnum_comments() + " Comments");
+        holder.txtlikes.setText(rowItem.getlikes() + " Claps");  
+        if(!rowItem.getImageURL().equals("NO")){
+        	imageLoader.displayImage(rowItem.getImageURL(), holder.imageView, animateFirstDisplayListener);
+        } else {	
+        	holder.imageView.setImageResource(R.drawable.icon);
+        }
+        
+        if(!rowItem.getUserImageURL().equals("NO")){
+        	imageLoader.displayImage(rowItem.getUserImageURL(), holder.userimageView, animateFirstDisplayListener);
+        } else {
+        	holder.userimageView.setImageResource(R.drawable.icon);	
+        }
+        
+       
+        
+        if(rowItem.getliked().equals(true)){
+        	holder.my_like_btn.setTextColor(Color.BLUE);
+        } else {
+        	holder.my_like_btn.setTextColor(Color.BLACK);
+        }
+
+        
+        holder.imageView.setOnClickListener(new View.OnClickListener() {
+        	public void onClick(View v) {
+        		Log.d("TXT", "ChitImage: "+v.getTag().toString());
+        		// get fragment manager
+        	
+        		
+                SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(getActivity());
+                SharedPreferences.Editor editor = sharedPreferences.edit();
+                editor.putString("Lookup_ChitID", v.getTag().toString());            
+                editor.commit(); 
+        		
+
+        		
+	        	Intent i = new Intent(getActivity(), chit_frag.class);
+	        	startActivity(i);
+
+        	    
+        	}
+        	
+     
+        });        
+  
+        holder.userimageView.setOnClickListener(new View.OnClickListener() {
+        	public void onClick(View v) {
+
+        		Log.d("TXT", "UserImage: "+v.getTag().toString());
+        	}
+        	
+     
+        });  
+        
+        
+        PausePlayBtn.setOnClickListener(new View.OnClickListener() {
+        	public void onClick(View v) {
+        		if(PausePlayBtn.isChecked()){
+        			if(mp != null){
+        	
+        				mp.start();
+        				
+        			}
+        		} else {
+        			mp.pause(); 
+        		
+        		}
+        		
+        	}
+        	
+     
+        });
+        
+        
+        holder.Comment_btn.setOnClickListener(new View.OnClickListener() {
+     	   @Override
+     	   public void onClick(View v) {
+     		   
+               SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(getActivity());
+               SharedPreferences.Editor editor = sharedPreferences.edit();
+               editor.putString("Lookup_ChitID", v.getTag().toString());            
+               editor.commit(); 
+       		
+       		
+	        	Intent i = new Intent(getActivity(), comments.class);
+	        	startActivity(i); 
+
+     	   }
+     });        
+        
+        
+        
+        holder.my_play_btn.setOnClickListener(new View.OnClickListener() {
+        	   @Override
+			public void onClick(View v) {
+        		   if(play_btn == v){
+        			   btn_opt = true;
+        		
+        		   } else {
+   
+        			   
+        			   btn_opt = false;  
+	   					Log.d("TEST", "Starting a new audio file");
+	   					mp_layout.setVisibility(LinearLayout.VISIBLE);
+	   				    String url = rowItem.getAudioURL();
+	   				    
+	   				  song_title_txt.setText("Now Playing: "+rowItem.getDesc());
+	   				
+	   				    Log.i("TAG", "selected file and name path " + url);
+	   				    songPath = url;
+	   				    audio_bar = (SeekBar) getActivity().findViewById(R.id.Prim_Bar);
+	   				    mediaplayerMethod(songPath);
+   			
+   				      Toast.makeText(context, "Playing Audio",
+   					  Toast.LENGTH_LONG).show();	      			   
+			   
+        		   }  		   
+	   
+
+        	   }
+        });
+         
+        holder.my_like_btn.setOnClickListener(new View.OnClickListener() {
+     	   @Override
+		public void onClick(View v) {
+
+     		  new Like_Chit().execute(rowItem);
+     	   }   
+ 	   });
+      
+        return convertView;
+    }
+
+	
+    @Override
+    public int getCount() {    
+        return rowItems.size();
+    }
+ 
+    @Override
+    public Object getItem(int position) {
+        return rowItems.get(position);
+    }
+ 
+    @Override
+    public long getItemId(int position) {
+        return rowItems.indexOf(getItem(position));
+    }
+
+    
+
+    protected void mediaplayerMethod(String filepath) {
+        Log.d("TAG", "mediaplayerMethod audio file path " + filepath);
+
+        if(mp != null){
+            mp.release();
+            mHandler.removeCallbacks(mUpdateTimeTask);
+        }
+
+        mp = new MediaPlayer();
+        
+        mp.setOnCompletionListener(this); // Important
+        audio_bar.setOnSeekBarChangeListener(this);
+        utils = new Utilities();
+        playSong(filepath);
+
+    }
+
+    private void playSong(final String fileptath) {
+
+        final Handler handler = new Handler() {
+            @Override
+            public void handleMessage(Message message) {
+              
+
+                try {
+                    // mp.prepare(); 
+                	
+                	
+                    mp.start();
+                    
+                    PausePlayBtn.setChecked(true);
+
+                    audio_bar.setProgress(0);
+                    audio_bar.setMax(100);
+
+
+                    updateProgressBar();
+
+                } catch (IllegalArgumentException e) {
+                    e.printStackTrace();
+                } catch (IllegalStateException e) {
+                    e.printStackTrace();
+                }
+
+            }
+        };
+
+        Thread thread = new Thread() {
+            @Override
+            public void run() {
+
+
+                try {
+                    mp.reset();
+                    mp.setDataSource(fileptath);
+
+                   Log.i("TAG", "internal file");
+
+                    mp.prepare();
+
+                } catch (IllegalArgumentException e) {
+                    e.printStackTrace();
+                } catch (IllegalStateException e) {
+                    e.printStackTrace();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+
+                Message message = handler.obtainMessage(1, "");
+                handler.sendMessage(message);
+            }
+        };
+        thread.start();
+
+    }
+
+
+    public void updateProgressBar() {
+        mHandler.postDelayed(mUpdateTimeTask, 100);
+    }
+
+    
+    private String getTimeString(long millis) {
+        StringBuffer buf = new StringBuffer();
+
+        int minutes = (int) (( millis % (1000*60*60) ) / (1000*60));
+        int seconds = (int) (( ( millis % (1000*60*60) ) % (1000*60) ) / 1000);
+
+        buf
+
+            .append(String.format("%2d", minutes))
+            .append(":")
+            .append(String.format("%02d", seconds));
+
+        return buf.toString();
+    }
+    
+    private Runnable mUpdateTimeTask = new Runnable() {
+        public void run() {
+            try {
+
+                long totalDuration = mp.getDuration();
+                long currentDuration = mp.getCurrentPosition();
+                
+                song_dur_txt.setText(getTimeString(currentDuration));
+
+                int progress = (int) (utils.getProgressPercentage(
+                        currentDuration, totalDuration));
+
+                song_dur_txt_total.setText(getTimeString(totalDuration));
+                audio_bar.setProgress(progress);
+
+                try {
+
+                    double progVal = (progress / 100.0) * (360.0);
+
+                    int progInt = (int) Math.ceil(progVal);
+
+                } catch (NumberFormatException e) {
+
+                    Log.e("TAG", "NumberFormatException " + e);
+                }
+
+                // Running this thread after 100 milliseconds
+                mHandler.postDelayed(this, 100);
+
+            } catch (IllegalStateException e) {
+                Log.e("TAG", "IllegalStateException " + e);
+            }
+
+        }
+    };
+
+    @Override
+    public void onCompletion(MediaPlayer mp) {
+    	
+    	
+    	Log.d("TEST","COMPLETED");
+    	
+    	audio_bar.setProgress(100);
+    	PausePlayBtn.setChecked(false);
+    	mp.stop(); 
+        mp.release(); 
+        audio_bar.setProgress(0);
+        mp_layout.setVisibility(RelativeLayout.GONE);
+
+    }
+
+    @Override
+    public void onProgressChanged(SeekBar arg0, int arg1, boolean arg2) {
+        // TODO Auto-generated method stub
+
+    }
+
+    @Override
+    public void onStartTrackingTouch(SeekBar arg0) {
+        // TODO Auto-generated method stub
+        mHandler.removeCallbacks(mUpdateTimeTask);
+
+    }
+
+    @Override
+    public void onStopTrackingTouch(SeekBar arg0) {
+        // TODO Auto-generated method stub
+        mHandler.removeCallbacks(mUpdateTimeTask);
+        int totalDuration = mp.getDuration();
+        int currentPosition = utils.progressToTimer(audio_bar.getProgress(),
+                totalDuration);
+
+        // forward or backward to certain seconds
+        mp.seekTo(currentPosition);
+
+
+        updateProgressBar();
+    }
+    
+    
+}
+
+
+private class Like_Chit extends AsyncTask<RowItem, Void, RowItem> {
+	
+    SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(getActivity());
+    String username = sharedPreferences.getString("Name", null);
+    String email = sharedPreferences.getString("Email", null);
+    String id = sharedPreferences.getString("ID", null);
+    String pw = sharedPreferences.getString("PW", null);
+    String Result = "";
+    String Response = "";
+    String Comment = "";
+    Integer like_Count = 0;
+    String like_Bool;
+    
+    Long chitid;
+	@Override
+	protected RowItem doInBackground(RowItem... params) {
+		// TODO Auto-generated method stub
+		RowItem row_holder = params[0];
+		id = row_holder.chit_id;
+
+		 HttpURLConnection connection;
+           OutputStreamWriter request = null;
+
+                URL url = null;           
+                String parameters = "ID="+id+"&UserName="+username+"&Email="+email+"&id="+id+"&pw="+pw+"&Type=LikeChit"; 
+
+               	 
+               	 try {
+					url = new URL("http://chitter-chat.com/android/android_like.php");
+
+                    connection = (HttpURLConnection) url.openConnection();
+                    connection.setDoOutput(true);
+                    connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+                    connection.setRequestMethod("POST");    
+
+                    request = new OutputStreamWriter(connection.getOutputStream());
+                    request.write(parameters);
+                    request.flush();
+                    request.close();            
+                    String line = "";
+      
+                    InputStreamReader isr = new InputStreamReader(connection.getInputStream(), "UTF-8");
+                    BufferedReader reader = new BufferedReader(isr, 8);
+                  
+
+  
+                    Result = reader.toString();
+                    
+                    StringBuilder sb = new StringBuilder();
+                    
+                    while((line = reader.readLine()) != null){
+
+                        sb.append(line);
+
+                    }
+  
+                    Result = sb.toString();
+                    
+ 
+                    int jsonStart = Result.indexOf("{");
+                    int jsonEnd = Result.lastIndexOf("}");
+
+                    if (jsonStart >= 0 && jsonEnd >= 0 && jsonEnd > jsonStart) {
+                    	Result = Result.substring(jsonStart, jsonEnd + 1);
+                    } else {
+                        // deal with the absence of JSON content here
+                    }                   
+                    JSONObject jObject;
+
+    				jObject = new JSONObject(Result);
+
+
+    	            JSONArray jArray = (JSONArray) jObject.get("Feed");
+    	            
+    	        	JSONObject FeedObj = jArray.getJSONObject(0);
+
+    	        	Response = FeedObj.getString("Result");
+    	        	Comment = FeedObj.getString("Comments");
+    	        	if(Response.equals("Successful")){
+
+	    	        	
+	    	        		like_Count = FeedObj.getInt("Count");
+	    	        		like_Bool = FeedObj.getString("Comments");
+    	        	
+    	        	}
+                    
+                    isr.close();
+                    reader.close();
+                    
+ 				} catch (MalformedURLException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				} catch (JSONException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+		
+		return row_holder;
+	}
+
+
+	@Override
+	protected void onPostExecute(RowItem holder) {
+		if(Response.equals("Successful")){
+			if(like_Bool.equals("Liked")){
+				holder.setlikes(like_Count);
+				holder.setliked(true);
+				adapter_feed.notifyDataSetChanged();
+			} else if(like_Bool.equals("Unliked")){
+				holder.setlikes(like_Count);
+				holder.setliked(false);
+				adapter_feed.notifyDataSetChanged();
+			} 
+		
+		} else {
+			// could not perform request
+     		Toast.makeText(getActivity(), Comment ,
+        	Toast.LENGTH_SHORT).show();	
+			
+		}
+		
+	}
+}
+
+}
